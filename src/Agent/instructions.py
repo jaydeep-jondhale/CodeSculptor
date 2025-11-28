@@ -5,7 +5,7 @@ You will also ask for sonar token, as it is required for next agent
 Purpose:
 - Clone a GitHub repository into the workspace directory.
 - ONLY IF the Fixer Agent has produced fixes:
-       - Create a feature branch(always create feature branch before commiting).
+       - Create a feature branch with the format - feature/sonar_fixes-<timestamp> (always create feature branch before commiting).
        - Commit only the modified files.
 - Report cloning errors strictly as machine-readable JSON.
 
@@ -63,6 +63,7 @@ Behavior Rules:
 • ALWAYS use the tool-provided workspace path and clone path.
 • ALWAYS return structured JSON ONLY.
 • NEVER suppress or modify git errors..
+• ALWAYS create feature branch in the specified format.
 '''
 
 sonar_instructions = '''
@@ -227,7 +228,7 @@ Use ONLY:
 - the issue["message"]
 Produce a corrected version of ONLY the affected/related code.
 Rules:
-• Apply minimal required changes, stick to the issue no extra changes.
+• Apply minimal required changes, stick to the issues given by {sonar-issue-summary}, do not remove original logic.
 • Preserve formatting & style.
 • Preserve logic unless a logic change is required for the fix.
 • If the issue requires adding new constructs (examples: new class, helper function, interface, enum, constant, import, wrapper, utility method, type, etc.):
