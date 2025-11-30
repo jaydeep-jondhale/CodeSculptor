@@ -1,4 +1,4 @@
-from google.adk.agents.llm_agent import Agent
+from google.adk.agents.llm_agent import LlmAgent
 
 import os
 import subprocess
@@ -11,28 +11,16 @@ from google import genai
 client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
 repo_input = None
-workdir=r"C:\Users\Vaishnavi\Desktop\VAISHNAVI\Projects\AI Agents\Code Sculptor\CodeSculptor\workspace"
+workdir=Path(r"C:\Users\Vaishnavi\Desktop\VAISHNAVI\Projects\AIAgents\Code_Sculptor\CodeSculptor\workspace")
 repo_path = None
 branch_name = None
 
-def init_git_agent(repo_link_or_path: str, workdir_path: str):
+def init_git_agent(repo_link_or_path: str):
     """
     Initialize the Git Agent with the repository source and workspace directory.
 
     Purpose:
-        Sets up global state required by all Git operations. Must be called
-        before clone, checkout, commit, or push tools.
-
-    Args:
-        repo_link_or_path (str):
-            Remote Git URL (HTTPS/SSH) or a local repository path.
-        workdir_path (str | Path):
-            Directory where the agent will create/use a workspace. A "repo"
-            subfolder inside this directory becomes the active repo path.
-
-    Behavior:
-        - Stores repo_input, workdir, and repo_path for downstream tools.
-        - Resets branch_name to None. Actual Git actions happen later.
+        Sets up global state required by all Git operations.
 
     Returns:
         None. This function only prepares internal state.
@@ -41,18 +29,10 @@ def init_git_agent(repo_link_or_path: str, workdir_path: str):
         - Must be executed first in any Git workflow.
         - Does not validate URLs or paths; clone_or_open_repo() will handle that.
         - If called with an invalid path, later tools may raise errors.
-
-    Summary:
-        Prepares the Git Agent environment so other tools can safely perform
-        cloning and repository operations.
     """
 
-    global repo_input, workdir, repo_path, branch_name
-    # If user passes /tmp/... or \tmp/... → replace with Windows temp
-    if workdir_path.startswith("/") or workdir_path.startswith("\\"):
-        workdir_path = Path(tempfile.gettempdir()) / "gpt-agent-workdir"
-
-    workdir = Path(workdir_path)
+    global repo_input, repo_path, branch_name
+    
     workdir.mkdir(parents=True, exist_ok=True)
     repo_input = repo_link_or_path
     repo_path = workdir / "repo"
@@ -76,14 +56,7 @@ def clone_or_open_repo() -> str:
     """
     Prepare a working repository by either cloning it from a remote URL or opening an existing local repository path.
 
-    Returns:
-      A string representing the absolute path to the repository directory that will be used for all subsequent Git operations performed by the agent.
-
     Notes for AI agent/tool use:
-      - Repository input:
-          * If `repo_input` is an HTTP/HTTPS URL, the function treats it as a remote Git repository and attempts to clone it into `workdir/repo`(only if the target path does not already exist).
-          * If `repo_input` is a filesystem path, it must already exist. The function resolves it into an absolute directory path and uses it directly without cloning.
-
       - Cloning behaviour:
           * Cloning is performed using the system `git` CLI via `run_cmd()`.
 
@@ -97,8 +70,14 @@ def clone_or_open_repo() -> str:
       - Returned path:
           * `repo_path` is set internally to the resolved directory of the repository (either cloned or local).
           * The return value is always the string form of this path.
+          
+    ALWAYS Return:
+      repo_path (returned by the function) a string representing the absolute path to the repository directory.
+      {
+      "repo path": {repo_path}
+      }
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     workdir.mkdir(parents=True, exist_ok=True)
     repo_input_str = str(repo_input).strip()
 
@@ -136,32 +115,22 @@ def create_branch() -> str:
       The name of the newly created Git branch as a string. The branch name follows the pattern: `agent-refactor/<timestamp>` where `<timestamp>` is a unique value in the format `YYYYMMDD-HHMMSS`.
 
     Notes for AI agent/tool use:
-      - Branch naming:
-          * A unique timestamp is appended to ensure branch name collisions do not occur across multiple agent runs.
-          * The branch is always created under the prefix `agent-refactor/`.
-
       - Base branch selection:
           * The function attempts to switch the working directory to `main`.
           * If `main` does not exist, it falls back to `master`.
           * If neither branch exists, branch switching is skipped and a warning is printed, but execution continues.
 
-      - Pulling latest changes:
-          * The function checks if a remote named `origin` exists before attempting `git pull`.
-          * If `origin` is available, it pulls the latest changes to ensure the new branch is created from the most up-to-date commit.
-          * Pull failures (e.g., network issues, authentication, diverged history) emit warnings but do not stop execution.
-
-      - Branch creation:
-          * The function executes `git checkout -b <branch_name>` from the repository root.
-          * If the branch already exists or Git errors occur, exceptions from `run_cmd()` will propagate upward.
-
       - Error handling:
           * `run_cmd()` may raise a `RuntimeError` for Git failures such as invalid branch names, repository corruption, or missing Git CLI.
           * Agents calling this tool should handle these exceptions if a non-crashing flow is desired.
 
-      - Repository context:
-          * All Git commands are executed inside `repo_path`, which must be a valid Git repository directory prepared by `clone_or_open_repo()`.
+    ALWAYS Return:
+        The name of the newly created Git branch as a string returned by the function.
+        {
+        "created Git branch": {branch_name}
+        }
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     branch_name = f"agent-refactor/{timestamp}"
 
@@ -222,7 +191,7 @@ def apply_patch(file_path: str, content: str) -> str:
           * If the repository path is invalid, if the file cannot be written, or if the filesystem is read-only, Python I/O exceptions will be raised (e.g., `FileNotFoundError`, `PermissionError`).
           * Agents should catch these exceptions if they require a controlled failure mode or retry logic.
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     full_path = repo_path / file_path
     full_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -268,7 +237,7 @@ def run_tests() -> bool:
       - Repository context:
           * Tests are executed with `cwd=repo_path`, which must be a valid local repository directory prepared earlier (e.g., via `clone_or_open_repo()`).
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     # Detecting Python tests
     if (repo_path / "pytest.ini").exists() or (repo_path / "tests").exists():
         print("Running pytest...")
@@ -323,7 +292,7 @@ def commit(message: str) -> str:
       - Safety considerations for agents:
           * Because `git add .` stages *all* changes (including unintended ones), agents may want to call `git status --porcelain` beforehand if they need to inspect or reason about the exact modifications.
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     run_cmd("git add .", cwd=repo_path)
     
     # Check if there are changes to commit
@@ -331,7 +300,7 @@ def commit(message: str) -> str:
     if not status:
         print("No changes to commit")
         return None
-        
+
     run_cmd(["git", "commit", "-m", message], cwd=repo_path)
     commit_hash = run_cmd("git rev-parse HEAD", cwd=repo_path).strip()
     print(f"Changes committed → {commit_hash}")
@@ -370,7 +339,7 @@ def commit_and_push(message: str) -> str | None:
             - Any failure inside `run_cmd` (e.g., Git not installed, network issues, permission issues, or rejected pushes) may raise an exception.
             - Agents relying on non-exception flows should wrap calls in try/except.
     """
-    global repo_input, workdir, repo_path, branch_name
+    global repo_input, repo_path, branch_name
     commit_hash = commit(message)
     if commit_hash and branch_name:
         run_cmd(
@@ -379,15 +348,21 @@ def commit_and_push(message: str) -> str | None:
         )
         print(f"Changes pushed → commit {commit_hash}")
     return commit_hash
+
+
 instruction = f"""
 You are an Autonomous Git Operations AI Agent.
 
---- Responsibility ---
-You perform all Git actions needed to prepare a repository for other agents.
-Your workflow is automatic, deterministic, and safe.
-You NEVER ask questions unless the repository URL is missing.
+Your purpose:
+- Validate and prepare the target Git repository
+- Clone or open the repo safely
+- Ensure a clean base branch (main/master)
+- Create a new timestamped working branch
+- Apply file patches when requested
+- Run tests if available
+- Commit changes and push them to the remote
 
---- Required Input ---
+Required Input:
 1. A GitHub repository URL or local path
 2. (Optional) A diff/patch generated by other agents
 
@@ -396,64 +371,73 @@ If only the URL is given → proceed with normal workflow.
 
 --- Execution Flow ---
 
-STEP 0 → Initialize
-    Always call `init_git_agent()` first.
+STEP 1 — Initialize
+→ Always call init_git_agent() first.
 
-STEP 1 → Clone Repository
-    - Call `clone_or_open_repo()`
-    - Always clone into a clean workspace directory
-    - Never reuse or overwrite old folders
+STEP 2 — Clone Repository
+→ Call clone_or_open_repo().
+- Always clone into a fresh workspace.
+- Never reuse or overwrite old directories.
 
-STEP 2 → Create Feature Branch
-    - Call `create_branch()`
-    - Branch name format: agent/<timestamp>-workspace
-    - Never modify main/master directly
+If cloning fails:
+→ Report the specific error returned by the tool
+→ Stop processing
 
-STEP 3 → Apply Patches (if provided)
-    - If a diff or file update is received:
-        Call `apply_patch(file_path, content)`
-    - If patch application fails:
-        Return JSON with an error and stop
+STEP 3 — Create Feature Branch
+→ Call create_branch()
+- Branch format: agent/<timestamp>-workspace
+- Never modify main or master
 
-STEP 4 → Commit Changes
-    - Call `commit(message)`
-    - Commit message format:
-        "chore(agent): automated update"
+If branch creation fails:
+→ Report the error
+→ Stop processing
 
-STEP 5 → Return Metadata
-    Provide JSON with workspace path, branch, changed files, and commit hash.
+STEP 4 — Apply Patches (Optional)
+- If patch content is provided:
+→ Call apply_patch(file_path, content)
 
---- Rules ---
+If patching fails:
+→ Return JSON with the error
+→ Stop processing
 
-1. Do NOT push to remote unless commit_and_push is explicitly used.
-2. Never alter main/master or protected branches.
-3. No destructive Git operations (no rebase/reset/amend/stash).
-4. Do NOT execute repository scripts or arbitrary shell commands.
-5. Git Agent does NOT analyze or interpret code.
-6. Output MUST be clean JSON—no extra text or logs.
-7. Always use a fresh workspace to keep operations idempotent.
+STEP 5 — Commit Changes
+- If files were modified:
+→ Call commit("chore(agent): automated update")
 
---- Output Formats ---
+If no changes detected:
+→ Return metadata without commit hash
 
-If only cloning + branching:
-{{
-  "repo_path": "<local workspace path>",
-  "branch": "<created feature branch>"
-}}
+STEP 6 — Final Output / Context Registration
 
-If patches/tests/commits are also used:
-{{
-  "repo_path": "<local workspace path>",
-  "branch": "<created feature branch>",
-  "changed_files": [...],
-  "commit_hash": "<hash>",
-  "summary": "Repository prepared for the next agent"
-}}
+If the agent successfully executed only `clone_or_open_repo` and `create_branch` (i.e., NO patch/commit):
+    
+    1. **REQUIRED ACTION:** Generate a final, concise text string to register the results for the next agent.
+    2. **STRICT FORMAT (Must be exactly this):**
+        - Repository Path: [Insert the result from clone_or_open_repo]
+        - New Branch: [Insert the result from create_branch]
+    
+    This text string is the ONLY output for the next agent (`root_agent`) to consume. Do not add any conversational text or formatting.
 
---- Safety Notes ---
-• Do not interpret code or validate patch logic.  
-• Only verify that patches can be applied.  
-• Provide clear metadata so downstream agents can continue work safely.
+If patch/commit was executed:
+    
+    1. **REQUIRED ACTION:** Generate a final, concise text string to register the results.
+    2. **STRICT FORMAT (Must be exactly this):**
+        - Repository Path: [path]
+        - New Branch: [branch]
+        - Changed Files: [files],
+        - Commit Hash": [<hash>]
+        
+    This text string is the ONLY output for the next agent (`root_agent`).
+
+Behavior Requirements:
+
+- Never push unless commit_and_push() is explicitly called
+- Never modify or reset protected branches
+- No destructive Git operations (no rebase/reset/amend/stash)
+- Never run arbitrary scripts or shell commands
+- Do not analyze code logic—only apply patches as text
+- Always return clean structured JSON, no extra logs or commentary
+- Keep operations deterministic and idempotent
 """
 
 tools = [
@@ -466,10 +450,14 @@ tools = [
     commit_and_push
 ]
 
-root_agent = Agent(
+git_agent = LlmAgent(
     name="git_agent",
     model="gemini-2.5-flash-lite",     # "gemini-2.5-flash-lite" , gemini-2.0-flash-exp , gemini-2.5-pro
     description="Git automation using manual Python functions.",
     instruction=instruction,
-    tools=tools 
+    tools=tools,
+    # disallow_transfer_to_peers = True,
+    output_key="Git_output",
 )
+
+root_agent = git_agent
