@@ -103,7 +103,7 @@ def extract_code_context(file_path: str, line_number: int, window: int = 5) -> d
         }
 
 
-fixer_tools = [
+refactoring_tools = [
     read_file,
     write_file,
     extract_code_context
