@@ -1,0 +1,94 @@
+# Multi-Agent Refactoring Tool
+
+This project implements a multi-agent system for automatically detecting and fixing SonarCloud issues in a GitHub repository.
+
+## Overview
+
+The system consists of two agents working in a sequence:
+
+1.  **Sonar Analysis Agent**: This agent analyzes a given GitHub repository for issues on SonarCloud.
+2.  **Sonar Issue Fixer Agent**: This agent clones the repository, creates a new branch, and attempts to fix the issues reported by the analysis agent.
+
+The entire workflow is orchestrated by a `SequentialAgent`.
+
+## Features
+
+*   **Automated SonarCloud Analysis**: Automatically scans a GitHub repository for SonarCloud issues.
+*   **Automated Refactoring**: Attempts to automatically fix the detected SonarCloud issues.
+*   **Multi-Agent Architecture**: Utilizes a `SequentialAgent` to manage the workflow between the analysis and refactoring agents.
+*   **Gemini-Powered**: The agents are powered by Google's Gemini model.
+*   **Git Integration**: The refactoring agent creates a new branch and commits the fixes.
+
+## How it Works
+
+1.  **Input**: The system takes a GitHub repository URL and a SonarCloud token as input.
+2.  **Analysis**: The `sonar_issue_analyzer_agent` connects to SonarCloud, checks for a project associated with the repository, and fetches the list of issues.
+3.  **Refactoring**: If issues are found, the `sonar_issue_fixer_agent` is invoked. It clones the repository, creates a new branch named `feature/sonar_fixes-<timestamp>`, and iterates through the issues, attempting to fix them one by one.
+4.  **Commit**: After applying the fixes, the agent commits the modified files to the new branch.
+5.  **Output**: The system provides a summary of the fixes applied.
+
+## Getting Started
+
+### Prerequisites
+
+*   The project must be integrated with SonarCloud.
+*   SSH key setup for Git on the local machine where the tool is running, to allow committing changes.
+*   Python 3.x
+*   Google AI SDK
+*   A SonarCloud account and API token
+
+### Installation
+
+1.  Clone the repository:
+    ```bash
+    git clone <repository-url>
+    ```
+2.  Install the required dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. Create a `.env` file inside the `multi_agent_refactorer` directory with the following content:
+    ```
+    GOOGLE_GENAI_USE_VERTEXAI=0
+    GOOGLE_API_KEY=<your-google-api-key>
+    ```
+
+### Usage
+
+1. After cloning the project, navigate to the `codesculptor` directory.
+2. Run the following command to start the ADK web interface:
+   ```bash
+   adk web
+   ```
+3. Once the web interface is open, select the `multi_agent_refactorer` agent.
+4. Provide a prompt with the git url and your Sonar token.
+
+   **Sample Prompt:**
+   ```
+   git url = git@github.com:jaydeep-jondhale/ContactManagementAPI.git
+   SONAR_TOKEN = <your-sonar-token>
+   ```
+
+## Agents
+
+### `sonar_issue_analyzer_agent`
+
+*   **Purpose**: To analyze a GitHub repository for SonarCloud issues.
+*   **Tools**: `sonar_issue_analyzer_tools`
+*   **Instructions**: `analyzer_instructions`
+
+### `sonar_issue_fixer_agent`
+
+*   **Purpose**: To fix the SonarCloud issues found by the analyzer agent.
+*   **Tools**: `refactoring_tools`, `git_tools`
+*   **Instructions**: `refactoring_instructions`
+
+## Tools
+
+The agents use the following toolsets:
+
+*   `file_tools`: For file-based operations.
+*   `git_tools`: For Git operations like cloning, creating branches, and committing.
+*   `sonar_tools`: For interacting with the SonarCloud API.
+
+---
